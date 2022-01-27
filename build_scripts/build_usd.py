@@ -310,7 +310,7 @@ def RunCMake(context, force, extraArgs = None):
                     osx_rpath=(osx_rpath or ""),
                     generator=(generator or ""),
                     extraArgs=(" ".join(extraArgs) if extraArgs else "")))
-        Run("cmake --build . --config {config} -Os --strip-unneeded --target install/strip -- {multiproc} "
+        Run("cmake --build . --config {config} --target install/strip -- {multiproc} "
             .format(config=config,
                     multiproc=FormatMultiProcs(context.numJobs, generator)))
 
