@@ -130,7 +130,10 @@ Arch_InitTickTimer()
         fclose(in);
 
         if (cpuHz == 0.0) {
-            ARCH_ERROR("Could not find 'cpu MHz' in /proc/cpuinfo");
+            // Rather than fail, set our Lambda env defaults, as Apple Silicon currently reports no Mhz in Docker.
+            cpuHz = 1e6 * 2900;
+            //ARCH_ERROR("Could not find 'cpu MHz' in /proc/cpuinfo");
+            
         }
     }
 
