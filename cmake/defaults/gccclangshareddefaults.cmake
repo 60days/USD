@@ -27,11 +27,8 @@
 # to remain minimal, marking the points where divergence is required.
 include(Options)
 
-# Turn on C++11; pxr won't build without it. 
-set(_PXR_GCC_CLANG_SHARED_CXX_FLAGS "${_PXR_GCC_CLANG_SHARED_CXX_FLAGS} -std=c++11")
-
 # Enable all warnings.
-set(_PXR_GCC_CLANG_SHARED_CXX_FLAGS "${_PXR_GCC_CLANG_SHARED_CXX_FLAGS} -Wall")
+set(_PXR_GCC_CLANG_SHARED_CXX_FLAGS "${_PXR_GCC_CLANG_SHARED_CXX_FLAGS} -Wall -Wformat-security")
 
 # Errors are warnings in strict build mode.
 if (${PXR_STRICT_BUILD_MODE})
@@ -49,10 +46,6 @@ if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR
         NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 6.1)
             _disable_warning("unused-local-typedefs")
     endif()
-endif()
-
-if (${PXR_MAYA_TBB_BUG_WORKAROUND})
-    set(_PXR_GCC_CLANG_SHARED_CXX_FLAGS "${_PXR_GCC_CLANG_SHARED_CXX_FLAGS} -Wl,-Bsymbolic")
 endif()
 
 # If using pthreads then tell the compiler.  This should automatically cause

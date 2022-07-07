@@ -21,13 +21,11 @@
 // KIND, either express or implied. See the Apache License for the specific
 // language governing permissions and limitations under the Apache License.
 //
-#ifndef HDEMBREE_SAMPLER_H
-#define HDEMBREE_SAMPLER_H
+#ifndef PXR_IMAGING_PLUGIN_HD_EMBREE_SAMPLER_H
+#define PXR_IMAGING_PLUGIN_HD_EMBREE_SAMPLER_H
 
 #include "pxr/pxr.h"
 #include <cstddef>
-
-#include "pxr/imaging/glf/glew.h"
 
 #include "pxr/imaging/hd/enums.h"
 #include "pxr/imaging/hd/vtBufferSource.h"
@@ -84,6 +82,7 @@ HdEmbreeTypeHelper::GetTupleType<T>() { return HdTupleType{type, 1}; }
     TYPE_HELPER(GfVec4d, HdTypeDoubleVec4)
     TYPE_HELPER(GfMatrix4f, HdTypeFloatMat4)
     TYPE_HELPER(GfMatrix4d, HdTypeDoubleMat4)
+    TYPE_HELPER(GfQuath, HdTypeHalfFloatVec4)
 #undef TYPE_HELPER
 
 /// \class HdEmbreeBufferSampler
@@ -182,4 +181,4 @@ protected:
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#endif // HDEMBREE_SAMPLER_H
+#endif // PXR_IMAGING_PLUGIN_HD_EMBREE_SAMPLER_H

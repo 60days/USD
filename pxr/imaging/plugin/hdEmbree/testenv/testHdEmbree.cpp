@@ -23,26 +23,24 @@
 //
 #include "pxr/pxr.h"
 
-#include "pxr/imaging/glf/glew.h"
-#include "pxr/imaging/glf/drawTarget.h"
-#include "pxr/imaging/glf/image.h"
+#include "pxr/imaging/hio/image.h"
 
 #include "pxr/imaging/hd/engine.h"
 #include "pxr/imaging/hdSt/unitTestGLDrawing.h"
 #include "pxr/imaging/hd/unitTestDelegate.h"
-#include "pxr/imaging/hdSt/glConversions.h"
+#include "pxr/imaging/hdSt/hioConversions.h"
 
 #include "pxr/imaging/hdx/renderTask.h"
 
 #include "pxr/imaging/hd/camera.h"
 #include "pxr/imaging/hd/renderBuffer.h"
 
-#include "pxr/imaging/hdEmbree/rendererPlugin.h"
-#include "pxr/imaging/hdEmbree/renderDelegate.h"
+#include "pxr/imaging/plugin/hdEmbree/rendererPlugin.h"
+#include "pxr/imaging/plugin/hdEmbree/renderDelegate.h"
 
 #include "pxr/base/tf/errorMark.h"
 
-#include <embree2/rtcore.h>
+#include <embree3/rtcore.h>
 #include <iostream>
 
 PXR_NAMESPACE_USING_DIRECTIVE
@@ -58,6 +56,7 @@ public:
         : _smooth(false)
         , _instance(false)
         , _refined(false)
+        , _ao(false)
         , _outputName("color1.png")
     {
         SetCameraRotate(0,0);
@@ -119,9 +118,11 @@ private:
     // - Draw a scene with two instanced cubes?
     //   Or two normal cubes and a plane?
     // - Treat the cubes as subdivision surfaces, and refine them to spheres?
+    // - use ambient occlusion
     bool _smooth;
     bool _instance;
     bool _refined;
+    bool  _ao;
 
     // For offscreen tests, which AOV should we output?
     // (empty string means we should read color from the framebuffer).
@@ -150,7 +151,7 @@ void HdEmbree_TestGLDrawing::InitTest()
     _renderDelegate = _rendererPlugin->CreateRenderDelegate();
     TF_VERIFY(_renderDelegate != nullptr);
 
-    _renderIndex = HdRenderIndex::New(_renderDelegate);
+    _renderIndex = HdRenderIndex::New(_renderDelegate, HdDriverVector());
     TF_VERIFY(_renderIndex != nullptr);
 
     // Construct a new scene delegate to populate the render index.
@@ -177,9 +178,9 @@ void HdEmbree_TestGLDrawing::InitTest()
             format = HdFormatUNorm8Vec4;
             aovBinding.aovName = HdAovTokens->color;
             aovBinding.clearValue = VtValue(GfVec4f(0.0f, 0.0f, 0.0f, 1.0f));
-        } else if (_aov == "linearDepth") {
+        } else if (_aov == "cameraDepth") {
             format = HdFormatFloat32;
-            aovBinding.aovName = HdAovTokens->linearDepth;
+            aovBinding.aovName = HdAovTokens->cameraDepth;
             aovBinding.clearValue = VtValue(0.0f);
         } else if (_aov == "primId") {
             format = HdFormatInt32;
@@ -188,8 +189,8 @@ void HdEmbree_TestGLDrawing::InitTest()
         }
         aovBinding.renderBufferId = renderBuffer;
         _sceneDelegate->AddRenderBuffer(renderBuffer,
-            GfVec3i(GetWidth(), GetHeight(), 1),
-            format, false);
+            HdRenderBufferDescriptor{GfVec3i(GetWidth(), GetHeight(), 1),
+            format, false});
     }
 
     // Params is a general argument structure to the render task.
@@ -226,6 +227,18 @@ void HdEmbree_TestGLDrawing::InitTest()
                 VtValue(HdRprimCollection(HdTokens->geometry, 
                 HdReprSelector(_smooth ? HdReprTokens->smoothHull 
                                        : HdReprTokens->hull))));
+    }
+
+    if(_ao) {
+        //
+        // Check ambient occlusion, this might matter especially in the case
+        // where smooth normals are not used since embree renderer then
+        // has to calculate the normals
+        //
+        _renderDelegate->SetRenderSetting(
+            HdEmbreeRenderSettingsTokens->enableAmbientOcclusion, VtValue(true));
+        _renderDelegate->SetRenderSetting(
+            HdEmbreeRenderSettingsTokens->ambientOcclusionSamples, VtValue(16));
     }
 
     if (_instance) {
@@ -280,17 +293,32 @@ void HdEmbree_TestGLDrawing::InitTest()
     }
 
     // Configure the camera looking slightly down on the objects.
-    GfFrustum frustum;
-    frustum.SetNearFar(GfRange1d(0.1, 1000.0));
-    frustum.SetPosition(GfVec3d(0, -5, 10));
-    frustum.SetRotation(GfRotation(GfVec3d(1, 0, 0), 45));
+    GfMatrix4f viewMatrix;
+    viewMatrix.SetLookAt(
+        GfVec3f(0, -5, 10),
+        GfRotation(GfVec3d(1, 0, 0), 45));
+    _sceneDelegate->UpdateTransform(
+        camera,
+        viewMatrix.GetInverse());
 
-    _sceneDelegate->UpdateCamera(camera,
-        HdCameraTokens->worldToViewMatrix,
-        VtValue(frustum.ComputeViewMatrix()));
-    _sceneDelegate->UpdateCamera(camera,
-        HdCameraTokens->projectionMatrix,
-        VtValue(frustum.ComputeProjectionMatrix()));
+    _sceneDelegate->UpdateCamera(
+        camera,
+        HdCameraTokens->clippingRange,
+        VtValue(GfRange1f(0.1, 1000.0)));
+
+    _sceneDelegate->UpdateCamera(
+        camera,
+        HdCameraTokens->horizontalAperture,
+        VtValue(100.0f));
+    _sceneDelegate->UpdateCamera(
+        camera,
+        HdCameraTokens->verticalAperture,
+        VtValue(100.0f));
+    _sceneDelegate->UpdateCamera(
+        camera,
+        HdCameraTokens->focalLength,
+        VtValue(50.0f));
+
     _sceneDelegate->UpdateCamera(camera,
         HdCameraTokens->windowPolicy,
         VtValue(CameraUtilCrop));
@@ -298,9 +326,6 @@ void HdEmbree_TestGLDrawing::InitTest()
 
 void HdEmbree_TestGLDrawing::DrawTest()
 {
-    // The GL viewport needs to be set before calling execute.
-    glViewport(0, 0, GetWidth(), GetHeight());
-
     // XXX: We don't plumb changes to window size to the task.
 
     // Ask hydra to execute our render task (producing an image).
@@ -359,11 +384,10 @@ void HdEmbree_TestGLDrawing::_ColorizeId(int32_t *buffer, int size)
 void HdEmbree_TestGLDrawing::OffscreenTest()
 {
     // Render and write out to a file.
-    glViewport(0, 0, GetWidth(), GetHeight());
 
     // Ask hydra to execute our render task (producing an image).
-    boost::shared_ptr<HdxRenderTask> renderTask =
-        boost::static_pointer_cast<HdxRenderTask>(
+    std::shared_ptr<HdxRenderTask> renderTask =
+        std::static_pointer_cast<HdxRenderTask>(
             _renderIndex->GetTask(SdfPath("/renderTask")));
 
     // For offline rendering, make sure we render to convergence.
@@ -382,12 +406,10 @@ void HdEmbree_TestGLDrawing::OffscreenTest()
         // multisampled color, etc.
         rb->Resolve();
 
-        GLenum unused;
-        GlfImage::StorageSpec storage;
+        HioImage::StorageSpec storage;
         storage.width = rb->GetWidth();
         storage.height = rb->GetHeight();
-        HdStGLConversions::GetGlFormat(rb->GetFormat(),
-            &storage.format, &storage.type, &unused);
+        storage.format = HdStHioConversions::GetHioFormat(rb->GetFormat());
         storage.flipped = true;
         storage.data = rb->Map();
 
@@ -395,29 +417,23 @@ void HdEmbree_TestGLDrawing::OffscreenTest()
         // writing it to a file.  Additionally, we write prim ID as RGBA u8,
         // instead of single-channel int32, since the former has better file
         // support.
-        if (_aov == "linearDepth") {
+        if (_aov == "cameraDepth") {
             _RescaleDepth(reinterpret_cast<float*>(storage.data),
                 storage.width*storage.height);
         } else if (_aov == "primId") {
-            storage.format = GL_RGBA;
-            storage.type = GL_UNSIGNED_BYTE;
+            storage.format =  HioFormatUNorm8Vec4;
             _ColorizeId(reinterpret_cast<int32_t*>(storage.data),
                 storage.width*storage.height);
         }
 
         VtDictionary metadata;
 
-        GlfImageSharedPtr image = GlfImage::OpenForWriting(_outputName);
+        HioImageSharedPtr image = HioImage::OpenForWriting(_outputName);
         if (image) {
             image->Write(storage, metadata);
         }
 
         rb->Unmap();
-    } else {
-        // If this test isn't using the AOV API, we want to write out the
-        // color data in the GL framebuffer, using the base class's
-        // helper function.
-        WriteToFile("color", _outputName);
     }
 }
 
@@ -455,12 +471,14 @@ void HdEmbree_TestGLDrawing::ParseArgs(int argc, char *argv[])
                    (i+1) < argc) {
             _outputName = std::string(argv[i+1]);
             ++i;
+        } else if (std::string(argv[i]) == "--ao") {
+            _ao = true;
         }
     }
 
-    // AOV only supports "color", "linearDepth", and "primId" currently.
+    // AOV only supports "color", "cameraDepth", and "primId" currently.
     if (_aov.size() > 0 &&
-        _aov != "color" && _aov != "linearDepth" && _aov != "primId") {
+        _aov != "color" && _aov != "cameraDepth" && _aov != "primId") {
         TF_WARN("Unrecognized AOV token '%s'", _aov.c_str());
         exit(EXIT_FAILURE);
     }

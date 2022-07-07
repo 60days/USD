@@ -26,7 +26,20 @@
 set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /EHsc")
 
 # Standards compliant.
-set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /Zc:rvalueCast /Zc:strictStrings /Zc:inline")
+set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /Zc:rvalueCast /Zc:strictStrings")
+
+# The /Zc:inline option strips out the "arch_ctor_<name>" symbols used for
+# library initialization by ARCH_CONSTRUCTOR starting in Visual Studio 2019, 
+# causing release builds to fail. Disable the option for this and later 
+# versions.
+# 
+# For more details, see:
+# https://developercommunity.visualstudio.com/content/problem/914943/zcinline-removes-extern-symbols-inside-anonymous-n.html
+if (MSVC_VERSION GREATER_EQUAL 1920)
+    set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /Zc:inline-")
+else()
+    set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /Zc:inline")
+endif()
 
 # Turn on all but informational warnings.
 set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /W3")
@@ -86,8 +99,18 @@ if (NOT Boost_USE_STATIC_LIBS)
     _add_define("BOOST_ALL_DYN_LINK")
 endif()
 
+if(${PXR_USE_DEBUG_PYTHON})
+    _add_define("BOOST_DEBUG_PYTHON")
+    _add_define("BOOST_LINKING_PYTHON")
+endif()
+
 # Need half::_toFloat and half::_eLut.
 _add_define("OPENEXR_DLL")
+
+# Exclude headers from unnecessary Windows APIs to improve build
+# times and avoid annoying conflicts with macros defined in those
+# headers.
+_add_define("WIN32_LEAN_AND_MEAN")
 
 # These files require /bigobj compiler flag
 #   Vt/arrayPyBuffer.cpp

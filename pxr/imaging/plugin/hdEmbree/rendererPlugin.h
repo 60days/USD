@@ -21,8 +21,8 @@
 // KIND, either express or implied. See the Apache License for the specific
 // language governing permissions and limitations under the Apache License.
 //
-#ifndef HDEMBREE_RENDERER_PLUGIN_H
-#define HDEMBREE_RENDERER_PLUGIN_H
+#ifndef PXR_IMAGING_PLUGIN_HD_EMBREE_RENDERER_PLUGIN_H
+#define PXR_IMAGING_PLUGIN_HD_EMBREE_RENDERER_PLUGIN_H
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hd/rendererPlugin.h"
@@ -40,33 +40,33 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// prims (which translate scene data into drawable representations) and hydra
 /// renderpasses (which draw the scene to the framebuffer).
 ///
-class HdEmbreeRendererPlugin final : public HdRendererPlugin {
+class HdEmbreeRendererPlugin final : public HdRendererPlugin
+{
 public:
     HdEmbreeRendererPlugin() = default;
-    virtual ~HdEmbreeRendererPlugin() = default;
 
     /// Construct a new render delegate of type HdEmbreeRenderDelegate.
     /// Embree render delegates own the embree scene object, so a new render
     /// delegate should be created for each instance of HdRenderIndex.
     ///   \return A new HdEmbreeRenderDelegate object.
-    virtual HdRenderDelegate *CreateRenderDelegate() override;
+    HdRenderDelegate *CreateRenderDelegate() override;
 
     /// Construct a new render delegate of type HdEmbreeRenderDelegate.
     /// Embree render delegates own the embree scene object, so a new render
     /// delegate should be created for each instance of HdRenderIndex.
     ///   \param settingsMap A list of initialization-time settings for embree.
     ///   \return A new HdEmbreeRenderDelegate object.
-    virtual HdRenderDelegate *CreateRenderDelegate(
+    HdRenderDelegate *CreateRenderDelegate(
         HdRenderSettingsMap const& settingsMap) override;
 
     /// Destroy a render delegate created by this class's CreateRenderDelegate.
     ///   \param renderDelegate The render delegate to delete.
-    virtual void DeleteRenderDelegate(
+    void DeleteRenderDelegate(
         HdRenderDelegate *renderDelegate) override;
 
     /// Checks to see if the embree plugin is supported on the running system
     ///
-    virtual bool IsSupported() const override;
+    bool IsSupported() const override;
 
 private:
     // This class does not support copying.
@@ -76,4 +76,4 @@ private:
 
 PXR_NAMESPACE_CLOSE_SCOPE
 
-#endif // HDEMBREE_RENDERER_PLUGIN_H
+#endif // PXR_IMAGING_PLUGIN_HD_EMBREE_RENDERER_PLUGIN_H
